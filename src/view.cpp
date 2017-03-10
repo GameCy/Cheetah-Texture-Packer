@@ -26,13 +26,13 @@ void View::paintEvent(QPaintEvent * /* event */)
 }
 
 
-void View::updatePixmap(const QList<QImage> &images)
+void View::updatePixmap(const QList<AtlasPage> &atlases)
 {
     textures.clear();
     QPixmap texture;
-    for(int i = 0; i < images.count(); i++)
+    for(int i = 0; i < atlases.count(); i++)
     {
-        texture = QPixmap::fromImage(images.at(i));
+        texture = QPixmap::fromImage( atlases.at(i).GetImageBuffer());
         if(i == 0)
         {
             size = texture.size();
@@ -40,7 +40,7 @@ void View::updatePixmap(const QList<QImage> &images)
         textures << texture;
     }
     this->setMinimumSize(size.width()*scale,
-                         (size.height() + 10)*images.count()*scale);
+                         (size.height() + 10)*atlases.count()*scale);
     update();
 }
 

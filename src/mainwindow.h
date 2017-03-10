@@ -14,7 +14,8 @@
 #include <QDropEvent>
 #include <QUrl>
 #include <QDrag>
-#include "imagepacker.h"
+#include "atlasbuilder.h"
+#include "atlaspage.h"
 
 extern QStringList imageExtensions;
 
@@ -33,26 +34,22 @@ class MainWindow : public QMainWindow
 
     private:
         Ui::MainWindow *ui;
-        void RecurseDirectory(const QString &dir);
+
+        AtlasBuilder    builder;
         QString topImageDir;
-        ImagePacker packer;
         QList<packedImage> packedImageList;
         bool exporting;
         int recursiveLoaderCounter;
         bool recursiveLoaderDone;
         QPixmap pattern;
         void addDir(QString dir);
-        struct packerData
-        {
-            QListWidgetItem *listItem;
-            QString path;
-        };
+        void RecurseDirectory(const QString &dir);
 
     protected:
         void dropEvent(QDropEvent *event);
         void dragEnterEvent(QDragEnterEvent *event);
     signals:
-        void renderedImage(const QList<QImage> &image);
+        void renderedImage(const QList<AtlasPage> &image);
     public slots:
         void addTiles();
         void deleteSelectedTiles();

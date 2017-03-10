@@ -5,14 +5,15 @@
 #include <QTextStream>
 #include <QMimeData>
 
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     exporting = false;
     ui->setupUi(this);
-    connect(this, SIGNAL(renderedImage(QList<QImage>)), ui->widget,
-            SLOT(updatePixmap(QList<QImage>)));
+    connect(this, SIGNAL(renderedImage(QList<AtlasPage>)), ui->widget,
+            SLOT(updatePixmap(QList<AtlasPage>)));
     ui->outDir->setText(QDir::homePath());
     exporting = false;
     ui->widget->scaleBox = ui->scale;
@@ -34,6 +35,7 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
+
 
 void MainWindow::RecurseDirectory(const QString &dir)
 {
@@ -64,7 +66,7 @@ void MainWindow::RecurseDirectory(const QString &dir)
                     packerData *data = new packerData;
                     data->listItem = ui->tilesList->item(ui->tilesList->count() - 1);
                     data->path = info.absoluteFilePath();
-                    packer.addItem(data->path, data);
+                    builder.packer.addItem(data->path, data);
                 }
             }
         if(recursiveLoaderCounter == 500)
@@ -128,12 +130,12 @@ void MainWindow::deleteSelectedTiles()
     QList<QListWidgetItem *> itemList = ui->tilesList->selectedItems();
     for(int i = 0; i < itemList.size(); i++)
     {
-        for(int j = 0; j < packer.images.size(); ++j)
+        for(int j = 0; j < builder.packer.images.size(); ++j)
         {
-            if((static_cast<packerData *>(packer.images.at(j).id))->listItem == itemList[i])
+            if((static_cast<packerData *>(builder.packer.images.at(j).id))->listItem == itemList[i])
             {
-                delete(static_cast<packerData *>(packer.images.at(j).id));
-                packer.images.removeAt(j);
+                delete(static_cast<packerData *>(builder.packer.images.at(j).id));
+                builder.packer.images.removeAt(j);
             }
         }
     }
@@ -142,8 +144,8 @@ void MainWindow::deleteSelectedTiles()
 
 void MainWindow::packerUpdate()
 {
-    int i;
     quint64 area = 0;
+    ImagePacker &packer = builder.packer;
     packer.sortOrder = ui->sortOrder->currentIndex();
     packer.border.t = ui->borderTop->value();
     packer.border.l = ui->borderLeft->value();
@@ -156,239 +158,48 @@ void MainWindow::packerUpdate()
     packer.minFillRate = ui->minFillRate->value();
     packer.mergeBF = false;
     packer.rotate = ui->rotationStrategy->currentIndex();
-    int textureWidth = ui->textureW->value(), textureHeight = ui->textureH->value();
-    int heuristic = ui->comboHeuristic->currentIndex();
-    QString outDir = ui->outDir->text();
-    QString outFile = ui->outFile->text();
-    QString outFormat = ui->outFormat->currentText();
-    bool previewWithImages = ui->previewWithImages->isChecked();
 
+    int textureWidth = ui->textureW->value();
+    int textureHeight = ui->textureH->value();
+    int heuristic = ui->comboHeuristic->currentIndex();
 
     packer.pack(heuristic, textureWidth, textureHeight);
 
-    QList<QImage> textures;
-    for(i = 0; i < packer.bins.size(); i++)
-    {
-        QImage texture(packer.bins.at(i).width(), packer.bins.at(i).height(),
-                       QImage::Format_ARGB32);
-        texture.fill(Qt::transparent);
-        textures << texture;
-    }
+    bool previewWithImages = ui->previewWithImages->isChecked();
+    QString outDir = ui->outDir->text();
+    QString outFile = ui->outFile->text();
+    QString outFormat = ui->outFormat->currentText();
+
+
+    //if (exporting || previewWithImages)
+        builder.BuildAtlases(previewWithImages, &pattern);
+
+    // save files
     if(exporting)
     {
-        for(int j = 0; j < textures.count(); j++)
-        {
-            QString outputFile = outDir;
-            outputFile += QDir::separator();
-            outputFile += outFile;
-            if(textures.count() > 1)
-            {
-                outputFile += QString("_") + QString::number(j + 1);
-            }
-            outputFile += ".atlas";
-            QString imgFile = outFile;
-            if(textures.count() > 1)
-            {
-                imgFile += QString("_") + QString::number(j + 1);
-            }
-            imgFile += ".";
-            imgFile += outFormat.toLower();
-
-            QFile positionsFile(outputFile);
-            if(!positionsFile.open(QIODevice::WriteOnly | QIODevice::Text))
-            {
-                QMessageBox::critical(0, tr("Error"), tr("Cannot create file ") + outputFile);
-            }
-            else
-            {
-                QTextStream out(&positionsFile);
-                out << "textures: " << imgFile << "\n";
-                for(i = 0; i < packer.images.size(); i++)
-                {
-                    if(packer.images.at(i).textureId != j)
-                    {
-                        continue;
-                    }
-                    QPoint pos(packer.images.at(i).pos.x() + packer.border.l + packer.extrude,
-                               packer.images.at(i).pos.y() + packer.border.t + packer.extrude);
-                    QSize size, sizeOrig;
-                    QRect crop;
-                    sizeOrig = packer.images.at(i).size;
-                    if(!packer.cropThreshold)
-                    {
-                        size = packer.images.at(i).size;
-                        crop = QRect(0, 0, size.width(), size.height());
-                    }
-                    else
-                    {
-                        size = packer.images.at(i).crop.size();
-                        crop = packer.images.at(i).crop;
-                    }
-                    if(packer.images.at(i).rotated)
-                    {
-                        size.transpose();
-                        crop = QRect(crop.y(), crop.x(), crop.height(), crop.width());
-                    }
-                    out << ((static_cast<packerData *>(packer.images.at(i).id))->listItem)->text()
-                        <<
-                        "\t" <<
-                        pos.x() << "\t" <<
-                        pos.y() << "\t" <<
-                        crop.width() << "\t" <<
-                        crop.height() << "\t" <<
-                        crop.x() << "\t" <<
-                        crop.y() << "\t" <<
-                        sizeOrig.width() << "\t" <<
-                        sizeOrig.height() << "\t" <<
-                        (packer.images.at(i).rotated ? "r" : "") << "\n";
-                }
-            }
-        }
-    }
-    for(i = 0; i < packer.images.size(); i++)
-    {
-        if(packer.images.at(i).pos == QPoint(999999, 999999))
-        {
-            ((static_cast<packerData *>(packer.images.at(i).id))->listItem)->setForeground(
-                Qt::red);
-            continue;
-        }
-        ((static_cast<packerData *>(packer.images.at(i).id))->listItem)->setForeground(
-            Qt::black);
-        if(packer.images.at(i).duplicateId != NULL && packer.merge)
-        {
-            continue;
-        }
-        QPoint pos(packer.images.at(i).pos.x() + packer.border.l,
-                   packer.images.at(i).pos.y() + packer.border.t);
-        QSize size;
-        QRect crop;
-        if(!packer.cropThreshold)
-        {
-            size = packer.images.at(i).size;
-            crop = QRect(0, 0, size.width(), size.height());
-        }
+        if (!builder.SaveFiles(outDir, outFile, outFormat))
+            QMessageBox::critical(0, tr("Error"), tr("Cannot create file ") + outDir+"/"+outFile);
         else
-        {
-            size = packer.images.at(i).crop.size();
-            crop = packer.images.at(i).crop;
-        }
-        QImage img;
-        if((exporting || previewWithImages))
-        {
-            img = QImage((static_cast<packerData *>(packer.images.at(i).id))->path);
-        }
-        if(packer.images.at(i).rotated)
-        {
-            QTransform myTransform;
-            myTransform.rotate(90);
-            img = img.transformed(myTransform);
-            size.transpose();
-            crop = QRect(packer.images.at(i).size.height() - crop.y() - crop.height(),
-                         crop.x(), crop.height(), crop.width());
-        }
-        if(packer.images.at(i).textureId < packer.bins.size())
-        {
-            QPainter p(&textures.operator [](packer.images.at(i).textureId));
-            if(!exporting)
-            {
-                p.fillRect(pos.x(), pos.y(), size.width() + 2 * packer.extrude,
-                           size.height() + 2 * packer.extrude, pattern);
-            }
-            if(previewWithImages || exporting)
-            {
-                if(packer.extrude)
-                {
-                    QColor color1 = QColor::fromRgba(img.pixel(crop.x(), crop.y()));
-                    p.setPen(color1);
-                    p.setBrush(color1);
-                    if(packer.extrude == 1)
-                    {
-                        p.drawPoint(QPoint(pos.x(), pos.y()));
-                    }
-                    else
-                    {
-                        p.drawRect(QRect(pos.x(), pos.y(), packer.extrude - 1, packer.extrude - 1));
-                    }
-
-                    QColor color2 = QColor::fromRgba(img.pixel(crop.x(),
-                                                     crop.y() + crop.height() - 1));
-                    p.setPen(color2);
-                    p.setBrush(color2);
-                    if(packer.extrude == 1)
-                    {
-                        p.drawPoint(QPoint(pos.x(), pos.y() + crop.height() + packer.extrude));
-                    }
-                    else
-                    {
-                        p.drawRect(QRect(pos.x(), pos.y() + crop.height() + packer.extrude,
-                                         packer.extrude - 1, packer.extrude - 1));
-                    }
-
-                    QColor color3 = QColor::fromRgba(img.pixel(crop.x() + crop.width() - 1,
-                                                     crop.y()));
-                    p.setPen(color3);
-                    p.setBrush(color3);
-                    if(packer.extrude == 1)
-                    {
-                        p.drawPoint(QPoint(pos.x() + crop.width() + packer.extrude, pos.y()));
-                    }
-                    else
-                    {
-                        p.drawRect(QRect(pos.x() + crop.width() + packer.extrude, pos.y(),
-                                         packer.extrude - 1, packer.extrude - 1));
-                    }
-
-                    QColor color4 = QColor::fromRgba(img.pixel(crop.x() + crop.width() - 1,
-                                                     crop.y() + crop.height() - 1));
-                    p.setPen(color4);
-                    p.setBrush(color4);
-                    if(packer.extrude == 1)
-                    {
-                        p.drawPoint(QPoint(pos.x() + crop.width() + packer.extrude,
-                                           pos.y() + crop.height() + packer.extrude));
-                    }
-                    else
-                    {
-                        p.drawRect(QRect(pos.x() + crop.width() + packer.extrude,
-                                         pos.y() + crop.height() + packer.extrude, packer.extrude - 1,
-                                         packer.extrude - 1));
-                    }
-
-                    p.drawImage(QRect(pos.x(), pos.y() + packer.extrude, packer.extrude,
-                                      crop.height()), img, QRect(crop.x(), crop.y(), 1, crop.height()));
-                    p.drawImage(QRect(pos.x() + crop.width() + packer.extrude,
-                                      pos.y() + packer.extrude, packer.extrude, crop.height()), img,
-                                QRect(crop.x() + crop.width() - 1, crop.y(), 1, crop.height()));
-
-                    p.drawImage(QRect(pos.x() + packer.extrude, pos.y(), crop.width(),
-                                      packer.extrude), img, QRect(crop.x(), crop.y(), crop.width(), 1));
-                    p.drawImage(QRect(pos.x() + packer.extrude,
-                                      pos.y() + crop.height() + packer.extrude, crop.width(), packer.extrude), img,
-                                QRect(crop.x(), crop.y() + crop.height() - 1, crop.width(), 1));
-
-                    p.drawImage(pos.x() + packer.extrude, pos.y() + packer.extrude, img, crop.x(),
-                                crop.y(), crop.width(), crop.height());
-                }
-                else
-                {
-                    p.drawImage(pos.x(), pos.y(), img, crop.x(), crop.y(), crop.width(),
-                                crop.height());
-                }
-            }
-            else
-                if(!exporting)
-                {
-                    p.drawRect(pos.x(), pos.y(), size.width() - 1, size.height() - 1);
-                }
-        }
+            QMessageBox::information(0, tr("Done"), tr("Your atlas successfully saved in ") + outDir);
     }
-    for(int i = 0; i < textures.count(); i++)
+
+    // update color on labels
+    for(int i = 0; i < packer.images.size(); i++)
     {
-        area += textures.at(i).width() * textures.at(i).height();
+        const inputImage &inputImg = packer.images.at(i);
+        Qt::GlobalColor labelColor = Qt::black;
+        if(inputImg.pos == QPoint(999999, 999999))
+            labelColor = Qt::red;
+
+        packerData *inputData = static_cast<packerData *>(inputImg.id);
+        ((QListWidgetItem*)inputData->listItem)->setForeground(labelColor);
     }
+
+
+    // calculate total area
+
     float percent = (((float)packer.area / (float)area) * 100.0f);
-    float percent2 = (float)(((float)packer.neededArea / (float)area) * 100.0f);
+    float percent2 = (float)(((float)packer.neededArea / (float)builder.TotalArea) * 100.0f);
     ui->preview->setText(tr("Preview: ") +
                          QString::number(percent) + QString("% filled, ") +
                          (packer.missingImages == 0 ? QString::number(packer.missingImages) +
@@ -397,40 +208,13 @@ void MainWindow::packerUpdate()
                           tr(" images missed,") + "</b></font>") +
                          " " + QString::number(packer.mergedImages) + tr(" images merged, needed area: ")
                          +
-                         QString::number(percent2) + "%." + tr(" KBytes: ") + QString::number(
-                             area * 4 / 1024));
-    if(exporting)
+                         QString::number(percent2) + "%." + tr(" KBytes: ") + QString::number(builder.TotalArea * 4 / 1024));
+
+    if (!exporting)
     {
-        const char *format = qPrintable(outFormat);
-        for(int i = 0; i < textures.count(); i++)
-        {
-            QString imgdirFile;
-            imgdirFile = outDir;
-            imgdirFile += QDir::separator();
-            imgdirFile += outFile;
-            if(textures.count() > 1)
-            {
-                imgdirFile += QString("_") + QString::number(i + 1);
-            }
-            imgdirFile += ".";
-            imgdirFile += outFormat.toLower();
-            if(outFormat == "JPG")
-            {
-                textures.at(i).save(imgdirFile, format, 100);
-            }
-            else
-            {
-                textures.at(i).save(imgdirFile);
-            }
-        }
-        QMessageBox::information(0, tr("Done"),
-                                 tr("Your atlas successfully saved in ") + outDir);
-        exporting = false;
+        emit renderedImage(builder.atlasPages);
     }
-    else
-    {
-        emit renderedImage(textures);
-    }
+    exporting = false;
 }
 
 void MainWindow::setTextureSize2048()
@@ -458,8 +242,8 @@ void MainWindow::setTextureSize1024()
 }
 void MainWindow::updateAplhaThreshold()
 {
-    packer.cropThreshold = ui->alphaThreshold->value();
-    packer.UpdateCrop();
+    builder.packer.cropThreshold = ui->alphaThreshold->value();
+    builder.packer.UpdateCrop();
     updateAuto();
 }
 
@@ -486,7 +270,7 @@ void MainWindow::swapSizes()
 
 void MainWindow::clearTiles()
 {
-    packer.images.clear();
+    builder.packer.images.clear();
     ui->tilesList->clear();
 }
 
@@ -517,7 +301,7 @@ void MainWindow::dropEvent(QDropEvent *event)
             packerData *data = new packerData;
             data->listItem = ui->tilesList->item(ui->tilesList->count() - 1);
             data->path = fileInfo.absoluteFilePath();
-            packer.addItem(data->path, data);
+            builder.packer.addItem(data->path, data);
             //QMessageBox::information(this, tr("Dropped file"), "Dropping files is not supported yet. Drad and drop directory here.");
         }
         else

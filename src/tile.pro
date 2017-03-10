@@ -23,12 +23,18 @@ SOURCES += main.cpp\
 	imagepacker.cpp \
 	imagecrop.cpp \
 	imagesort.cpp \
-	maxrects.cpp
+	maxrects.cpp \
+    atlaspage.cpp \
+    atlasbuilder.cpp \
+    atlasimporter.cpp
 
 HEADERS  += mainwindow.h \
 	view.h \
 	imagepacker.h \
-	maxrects.h
+	maxrects.h \
+    atlaspage.h \
+    atlasbuilder.h \
+    atlasimporter.h
 FORMS    += mainwindow.ui
 
 QMAKE_CXXFLAGS += -Wextra -Werror

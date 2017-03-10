@@ -6,6 +6,7 @@
 #include <QPixmap>
 #include <QImage>
 #include <QComboBox>
+#include "atlaspage.h"
 
 class View : public QWidget
 {
@@ -20,7 +21,7 @@ class View : public QWidget
         float scale;
         QSize size;
     private slots:
-        void updatePixmap(const QList<QImage> &image);
+        void updatePixmap(const QList<AtlasPage> &atlases);
         void rescale(QString);
 };
 
