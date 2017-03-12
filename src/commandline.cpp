@@ -209,23 +209,16 @@ int CommandLine::Run(int argc, char *argv[])
     }
 
     qDebug() << "Saving to dir" << outDir << "and file" << outFile;
-    ImagePacker packer;
+    ImagePacker &packer = builder.packer;
     packer.sortOrder = sortorder;
-    packer.border.t = 0;
-    packer.border.l = 0;
-    packer.border.r = border;
-    packer.border.b = border;
-    packer.extrude = extrude;
-    packer.cropThreshold = crop ? cropThreshold : 0;
     packer.minFillRate = autosize ? autosizeThreshold : 0;
     packer.minTextureSizeX = minTextureSizeX;
     packer.minTextureSizeY = minTextureSizeY;
-    packer.merge = merge;
     packer.mergeBF = false;
-    packer.rotate = rotate;
-    packer.square = square;
-    packer.autosize = autosize;
-    int heuristic = 1;
+
+    builder.SetBorders(0,border,0,border);
+    builder.SetParams( crop ? cropThreshold : 0, extrude, rotate
+                       , merge, square, autosize);
 
     QString outFormat("PNG");
 
@@ -235,6 +228,7 @@ int CommandLine::Run(int argc, char *argv[])
         exit(1);
     }
 
+    int heuristic = 1;
     builder.UpdatePacker(heuristic, textureWidth, textureHeight);
     builder.SaveFiles(outDir, outFile, outFormat);
 

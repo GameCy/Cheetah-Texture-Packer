@@ -20,6 +20,8 @@ public:
 
     static QFileInfoList RecurseDirectory(const QString &dir, bool recurse, int maxFiles);
     void AddFiles(QFileInfoList &fileList, QString topImageDir);
+    void SetBorders(int top, int bottom, int left, int right);
+    void SetParams(int cropThreshold, int extrude, int rotate, bool merge, bool square, bool autosize);
 
     void UpdatePacker(int heuristic, int maxTexWidth, int maxTexHeight);
     void RenderAtlases(bool withImages, QPixmap *pattern);

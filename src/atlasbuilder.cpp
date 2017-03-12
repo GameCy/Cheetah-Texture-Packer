@@ -51,6 +51,24 @@ void AtlasBuilder::AddFiles(QFileInfoList &fileList, QString topImageDir)
     }
 }
 
+void AtlasBuilder::SetBorders(int top, int bottom, int left, int right)
+{
+    packer.border.t = bottom;
+    packer.border.b = top;
+    packer.border.l = left;
+    packer.border.r = right;
+}
+
+void AtlasBuilder::SetParams(int cropThreshold, int extrude, int rotate, bool merge, bool square, bool autosize)
+{
+    packer.cropThreshold = cropThreshold;
+    packer.extrude = extrude;
+    packer.rotate = rotate;
+    packer.merge = merge;
+    packer.square = square;
+    packer.autosize = autosize;
+}
+
 void AtlasBuilder::UpdatePacker(int heuristic, int maxTexWidth, int maxTexHeight)
 {
     packer.pack(heuristic, maxTexWidth, maxTexHeight);
