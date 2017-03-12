@@ -11,6 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     exporting = false;
+
     ui->setupUi(this);
     connect(this, SIGNAL(renderedImage(QList<AtlasPage>)), ui->widget,
             SLOT(updatePixmap(QList<AtlasPage>)));
@@ -37,78 +38,50 @@ MainWindow::~MainWindow()
 }
 
 
-void MainWindow::RecurseDirectory(const QString &dir)
-{
-    QDir dirEnt(dir);
-    QFileInfoList list = dirEnt.entryInfoList();
-    for(int i = 0; i < list.count() && !recursiveLoaderDone; i++)
-    {
-        recursiveLoaderCounter++;
-        QFileInfo info = list[i];
-
-        QString filePath = info.filePath();
-        QString fileExt = info.suffix().toLower();
-        QString name = dir + QDir::separator();
-        if(info.isDir())
-        {
-            // recursive
-            if(info.fileName() != ".." && info.fileName() != ".")
-            {
-                RecurseDirectory(filePath);
-            }
-        }
-        else
-            if(imageExtensions.contains(fileExt))
-            {
-                if(!QFile::exists(name + info.completeBaseName() + QString(".atlas")))
-                {
-                    ui->tilesList->addItem(filePath.replace(topImageDir, ""));
-                    packerData *data = new packerData;
-                    data->listItem = ui->tilesList->item(ui->tilesList->count() - 1);
-                    data->path = info.absoluteFilePath();
-                    builder.packer.addItem(data->path, data);
-                }
-            }
-        if(recursiveLoaderCounter == 500)
-        {
-            if(QMessageBox::No ==
-                    QMessageBox::question(
-                        this,
-                        tr("Directory is too big"),
-                        tr("It seems that directory <b>") + topImageDir +
-                        tr("</b> is too big. "
-                           "Loading may take HUGE amount of time and memory. "
-                           "Please, check directory again. <br>"
-                           "Do you want to continue?"),
-                        QMessageBox::Yes,
-                        QMessageBox::No))
-            {
-                recursiveLoaderDone = true;
-                recursiveLoaderCounter++;
-                continue;
-            }
-            ui->previewWithImages->setChecked(false);
-        }
-    }
-}
-
 void MainWindow::addDir(QString dir)
 {
     //FIXME
     //this is messy hack due to difference between QFileDialog and QFileInfo dir separator in Windows
+    QString baseFolder = dir + "/";
     if(QDir::separator() == '\\')
     {
-        topImageDir = dir.replace("\\", "/") + "/";
+        baseFolder = dir.replace("\\", "/") + "/";
     }
-    else
-    {
-        topImageDir = dir + "/";
-    }
+
     ui->outDir->setText(dir);
     recursiveLoaderCounter = 0;
     recursiveLoaderDone = false;
-    //packer.clear();
-    RecurseDirectory(dir);
+
+    // recurse folder, find image files and add them to packer
+    int imageCounter = builder.packer.images.size();
+    QFileInfoList inputFiles = builder.RecurseDirectory(dir,true, 500);
+    builder.AddFiles(inputFiles, baseFolder);
+
+    // add files to UI
+    foreach (QFileInfo info, inputFiles)
+    {
+        QString file = info.filePath().replace(baseFolder, "");
+        ui->tilesList->addItem( file );
+
+        const inputImage &inputImg = builder.packer.images.at(imageCounter);
+        ((packerData*)inputImg.externalData)->listItem = ui->tilesList->item(ui->tilesList->count() - 1);
+        imageCounter++;
+    }
+     /*
+    if(QMessageBox::No == QMessageBox::question(
+                this,
+                tr("Directory is too big"),
+                tr("It seems that directory <b>") + baseFolder +
+                tr("</b> is too big. "
+                   "Loading may take HUGE amount of time and memory. "
+                   "Please, check directory again. <br>"
+                   "Do you want to continue?"),
+                QMessageBox::Yes, QMessageBox::No))
+    {
+
+    }
+    */
+
     QFileInfo info(dir);
     ui->outFile->setText(info.baseName());
 
@@ -117,7 +90,7 @@ void MainWindow::addDir(QString dir)
 void MainWindow::addTiles()
 {
     QString dir = QFileDialog::getExistingDirectory(this,
-                  tr("Select tile directory"), topImageDir);
+                  tr("Select tile directory"), previousFolder);
     if(dir.length() > 0)
     {
         addDir(dir);
@@ -132,9 +105,9 @@ void MainWindow::deleteSelectedTiles()
     {
         for(int j = 0; j < builder.packer.images.size(); ++j)
         {
-            if((static_cast<packerData *>(builder.packer.images.at(j).id))->listItem == itemList[i])
+            if((static_cast<packerData *>(builder.packer.images.at(j).externalData))->listItem == itemList[i])
             {
-                delete(static_cast<packerData *>(builder.packer.images.at(j).id));
+                delete(static_cast<packerData *>(builder.packer.images.at(j).externalData));
                 builder.packer.images.removeAt(j);
             }
         }
@@ -145,6 +118,7 @@ void MainWindow::deleteSelectedTiles()
 void MainWindow::packerUpdate()
 {
     quint64 area = 0;
+    // setup packer parameters
     ImagePacker &packer = builder.packer;
     packer.sortOrder = ui->sortOrder->currentIndex();
     packer.border.t = ui->borderTop->value();
@@ -159,20 +133,19 @@ void MainWindow::packerUpdate()
     packer.mergeBF = false;
     packer.rotate = ui->rotationStrategy->currentIndex();
 
+    // build atlases
     int textureWidth = ui->textureW->value();
     int textureHeight = ui->textureH->value();
     int heuristic = ui->comboHeuristic->currentIndex();
 
-    packer.pack(heuristic, textureWidth, textureHeight);
+    builder.UpdatePacker(heuristic, textureWidth, textureHeight);
 
     bool previewWithImages = ui->previewWithImages->isChecked();
     QString outDir = ui->outDir->text();
     QString outFile = ui->outFile->text();
     QString outFormat = ui->outFormat->currentText();
 
-
-    //if (exporting || previewWithImages)
-        builder.BuildAtlases(previewWithImages, &pattern);
+    builder.RenderAtlases(previewWithImages, &pattern);
 
     // save files
     if(exporting)
@@ -191,13 +164,11 @@ void MainWindow::packerUpdate()
         if(inputImg.pos == QPoint(999999, 999999))
             labelColor = Qt::red;
 
-        packerData *inputData = static_cast<packerData *>(inputImg.id);
+        packerData *inputData = static_cast<packerData *>(inputImg.externalData);
         ((QListWidgetItem*)inputData->listItem)->setForeground(labelColor);
     }
 
-
-    // calculate total area
-
+    // statistics, total area
     float percent = (((float)packer.area / (float)area) * 100.0f);
     float percent2 = (float)(((float)packer.neededArea / (float)builder.TotalArea) * 100.0f);
     ui->preview->setText(tr("Preview: ") +

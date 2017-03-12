@@ -20,7 +20,7 @@ struct inputImage
 {
     quint32 hash;
     int textureId;
-    void *id;
+    void *externalData;
     void *duplicateId;
     QPoint pos;
     QSize size, sizeCurrent;

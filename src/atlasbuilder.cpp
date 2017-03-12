@@ -1,12 +1,62 @@
 #include "atlasbuilder.h"
 #include <QDir>
 
+QStringList AtlasBuilder::ImageExtensions;
+
 AtlasBuilder::AtlasBuilder()
 {
-
 }
 
-void AtlasBuilder::BuildAtlases(bool withImages, QPixmap *pattern)
+QFileInfoList AtlasBuilder::RecurseDirectory(const QString &dir, bool recurse, int maxFiles)
+{
+    QFileInfoList fileList;
+    QDir dirEnt(dir);
+    QFileInfoList list = dirEnt.entryInfoList();
+    for(int i = 0; i < list.count() && (maxFiles>=0); i++)
+    {
+        QFileInfo info = list[i];
+
+        QString filePath = info.filePath();
+        QString fileExt = info.suffix().toLower();
+        QString name = dir + QDir::separator();
+        if(info.isDir())
+        {
+            // recursive
+            if(recurse && info.fileName() != ".." && info.fileName() != ".")
+            {
+                fileList += RecurseDirectory(filePath, recurse, maxFiles);
+            }
+        }
+        else if(ImageExtensions.contains(fileExt))
+        {
+            if(!QFile::exists(name + info.completeBaseName() + QString(".atlas")))
+            {
+                maxFiles--;
+                fileList << info;
+            }
+        }
+    }
+    return fileList;
+}
+
+void AtlasBuilder::AddFiles(QFileInfoList &fileList, QString topImageDir)
+{
+    foreach(QFileInfo info, fileList)
+    {
+        packerData *data = new packerData;
+        data->path = info.absoluteFilePath();
+        data->filename = info.filePath().replace(topImageDir, "");
+        data->listItem = 0;
+        packer.addItem(data->path, data);
+    }
+}
+
+void AtlasBuilder::UpdatePacker(int heuristic, int maxTexWidth, int maxTexHeight)
+{
+    packer.pack(heuristic, maxTexWidth, maxTexHeight);
+}
+
+void AtlasBuilder::RenderAtlases(bool withImages, QPixmap *pattern)
 {
     // create empty pages
     TotalArea = 0;
@@ -24,7 +74,7 @@ void AtlasBuilder::BuildAtlases(bool withImages, QPixmap *pattern)
     for(int i = 0; i < packer.images.size(); i++)
     {
         const inputImage &inputImg = packer.images.at(i);
-        packerData *inputData = static_cast<packerData *>(inputImg.id);
+        packerData *inputData = static_cast<packerData *>(inputImg.externalData);
         if ( (inputImg.duplicateId != NULL && packer.merge) ||
              (inputImg.pos == QPoint(999999, 999999)) )
         {

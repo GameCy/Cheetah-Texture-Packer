@@ -17,8 +17,6 @@
 #include "atlasbuilder.h"
 #include "atlaspage.h"
 
-extern QStringList imageExtensions;
-
 namespace Ui
 {
     class MainWindow;
@@ -36,14 +34,14 @@ class MainWindow : public QMainWindow
         Ui::MainWindow *ui;
 
         AtlasBuilder    builder;
-        QString topImageDir;
+        QString         previousFolder;
+
         QList<packedImage> packedImageList;
         bool exporting;
         int recursiveLoaderCounter;
         bool recursiveLoaderDone;
         QPixmap pattern;
         void addDir(QString dir);
-        void RecurseDirectory(const QString &dir);
 
     protected:
         void dropEvent(QDropEvent *event);

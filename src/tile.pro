@@ -26,7 +26,8 @@ SOURCES += main.cpp\
 	maxrects.cpp \
     atlaspage.cpp \
     atlasbuilder.cpp \
-    atlasimporter.cpp
+    atlasimporter.cpp \
+    commandline.cpp
 
 HEADERS  += mainwindow.h \
 	view.h \
@@ -34,7 +35,8 @@ HEADERS  += mainwindow.h \
 	maxrects.h \
     atlaspage.h \
     atlasbuilder.h \
-    atlasimporter.h
+    atlasimporter.h \
+    commandline.h
 FORMS    += mainwindow.ui
 
 QMAKE_CXXFLAGS += -Wextra -Werror

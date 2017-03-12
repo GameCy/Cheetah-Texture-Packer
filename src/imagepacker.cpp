@@ -10,157 +10,6 @@ ImagePacker::ImagePacker()
     minTextureSizeY = 32;
 }
 
-//pack images, return list of positions
-/*void ImagePacker::pack(int heur, int w, int h)
-{
-    realculateDuplicates();
-    summArea = 0;
-    QSize size;
-    for(int i = 0; i < images.size(); i++)
-    {
-        images.operator [](i).pos = QPoint(999999, 999999);
-        if(trim)
-            size = images.at(i).crop.size();
-        else
-            size = images.at(i).size;
-        if(size.width() == w) size.setWidth(size.width() - border.l - border.r);
-        if(size.height() == h) size.setHeight(size.height() - border.t - border.b);
-        size += QSize(border.l + border.r, border.t + border.b);
-
-        images.operator [](i).rotated = false;
-        if((rotate == WIDTH_GREATHER_HEIGHT && size.width() > size.height()) ||
-           (rotate == WIDTH_GREATHER_2HEIGHT && size.width() > 2 * size.height()) ||
-           (rotate == HEIGHT_GREATHER_WIDTH && size.height() > size.width()) ||
-           (rotate == H2_WIDTH_H && size.height() > size.width() && size.width() * 2 > size.height()) ||
-           (rotate == W2_HEIGHT_W && size.width() > size.height() && size.height() * 2 > size.width()) ||
-           (rotate == HEIGHT_GREATHER_2WIDTH && size.height() > 2 * size.width()))
-        {
-            size.transpose();
-            images.operator [](i).rotated = true;
-        }
-        images.operator [](i).sizeCurrent = size;
-        if(images.at(i).duplicateId == NULL || !merge)
-            summArea += size.width() * size.height();
-    }
-    sort();
-    missingImages = 1;
-    mergedImages = 0;
-    area = 0;
-    neededArea = 0;
-    bins.clear();
-    QList<MaxRects> binsBuffer;
-    MaxRects *currentBin;
-    int binIndex = 0;
-    int added = 1;
-    int areaBuf = 0;
-    int W, H;
-    bool repeat = false;
-    bool WH = true;
-    while(missingImages && added)
-    {
-        if(!repeat)
-        {
-            H = 32;
-            W = 16;
-            WH = true;
-            summArea -= areaBuf;
-        }
-        repeat = false;
-        while(summArea > W * H && W * H < w * h)
-        {
-            WH = !WH;
-            if(WH)
-            {
-                H *= 2;
-                if(H > h)
-                    H = h;
-            }
-            else
-            {
-                W *= 2;
-                if(W > w)
-                    W = w;
-            }
-        }
-        missingImages = 0;
-        MaxRects rects;
-        MaxRectsNode mrn;
-        mrn.r = QRect(0, 0, W, H);
-        rects.F << mrn;
-        rects.heuristic = heur;
-        rects.leftToRight = ltr;
-        rects.w = W;
-        rects.h = H;
-        rects.rotation = rotate;
-        rects.border = &border;
-        binsBuffer << rects;
-        bins << QSize(W,H);
-        currentBin = &binsBuffer.last();
-        added = 0;
-        areaBuf = 0;
-        for(int i = 0; i < images.size(); i++)
-        {
-            if(QPoint(999999, 999999) != images.at(i).pos) continue;
-            if(images.at(i).duplicateId == NULL || !merge)
-            {
-                images.operator [](i).pos = currentBin->insertNode(&images.operator [](i));
-                images.operator [](i).textureId = binIndex;
-                if(QPoint(999999, 999999) == images.at(i).pos)
-                    missingImages++;
-                else
-                {
-                    areaBuf += images.at(i).sizeCurrent.width() * images.at(i).sizeCurrent.height();
-                    area += images.at(i).sizeCurrent.width() * images.at(i).sizeCurrent.height();
-                    added++;
-                }
-                if(binIndex == 0)
-                    neededArea += images.at(i).sizeCurrent.width() * images.at(i).sizeCurrent.height();
-            }
-        }
-        if(W * H < w * h && missingImages)
-        {
-            for(int i = 0; i < images.size(); i++)
-            {
-                if(images.at(i).textureId == binIndex)
-                    images.operator [](i).pos = QPoint(999999, 999999);
-            }
-            //summArea += areaBufCopy;
-            //areaBuf = areaBufCopy;
-            bins.removeLast();
-            binsBuffer.removeLast();
-            WH = !WH;
-            if(WH)
-            {
-                H *= 2;
-                if(H > h)
-                    H = h;
-            }
-            else
-            {
-                W *= 2;
-                if(W > w)
-                    W = w;
-            }
-//            qDebug() <<"!"<< W << H;
-            repeat = true;
-            added = 1;
-        }
-        else
-        {
-            if(added == 0) bins.removeLast();
-            binIndex++;
-        }
-    }
-    if(merge)
-        for(int i = 0; i < images.size(); i++)
-            if(images.at(i).duplicateId != NULL)
-            {
-                images.operator [](i).pos = find(images.at(i).duplicateId)->pos;
-                images.operator [](i).textureId = find(images.at(i).duplicateId)->textureId;
-                mergedImages++;
-            }
-}*/
-
 void ImagePacker::pack(int heur, int w, int h)
 {
     SortImages(w, h);
@@ -246,7 +95,7 @@ void ImagePacker::addItem(const QImage &img, void *data, QString path)
     i.hash = rc_crc32(0, img.bits(), img.byteCount());
     i.crop = crop(img);
     i.size = img.size();
-    i.id = data;
+    i.externalData = data;
     i.path = path;
     images << i;
 }
@@ -276,7 +125,7 @@ void ImagePacker::realculateDuplicates()
                     images.at(i).size == images.at(k).size &&
                     images.at(i).crop == images.at(k).crop)
             {
-                images.operator [](k).duplicateId = images.at(i).id;
+                images.operator [](k).duplicateId = images.at(i).externalData;
             }
         }
     }
@@ -286,7 +135,7 @@ void ImagePacker::removeId(void *data)
 {
     for(int k = 0; k < images.count(); k++)
     {
-        if(images.at(k).id == data)
+        if(images.at(k).externalData == data)
         {
             images.removeAt(k);
             break;
@@ -297,7 +146,7 @@ const inputImage *ImagePacker::find(void *data)
 {
     for(int i = 0; i < images.count(); i++)
     {
-        if(data == images.at(i).id)
+        if(data == images.at(i).externalData)
         {
             return &images.at(i);
         }
